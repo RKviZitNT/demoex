@@ -1,6 +1,3 @@
-from models.order import Order
-
-
 class OrderService:
     def __init__(self, db):
         self.db = db

@@ -82,7 +82,6 @@ class MainWindow(QMainWindow):
             data = self.service.search(text)
             self.fill_table(data)
 
-            # подсветка
             for row in range(self.tableOrders.rowCount()):
                 for col in range(self.tableOrders.columnCount()):
                     item = self.tableOrders.item(row, col)
