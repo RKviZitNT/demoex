@@ -1,85 +1,47 @@
+from peewee import fn
+
+from models.models import Client, Order
+
+
 class OrderService:
-    def __init__(self, db):
-        self.db = db
 
-    BASE_QUERY = """
-    SELECT
-        Customers.CustomerName,
-        Customers.City,
-        Customers.Phone,
-        Orders.OrderDate,
-        Orders.OrderAmount
-    FROM Orders
-    INNER JOIN Customers
-        ON Orders.CustomerID = Customers.CustomerID
-    """
+    @staticmethod
+    def get_clients():
+        
+        return Client.select()
+    
+    @staticmethod
+    def get_orders():
 
-    def get_all(self):
-        return self._execute(self.BASE_QUERY)
+        return Order.select(Order, Client).join(Client)
+    
+    @staticmethod
+    def filter_by_client(client_id):
 
-    def get_customers(self):
-        query = """
-        SELECT CustomerName
-        FROM Customers
-        ORDER BY CustomerName
-        """
+        return Order.select(Order, Client).join(Client).where(Client.id == client_id)
+    
+    @staticmethod
+    def sort_orders(query, field_name, is_asc):
 
-        with self.db.connect() as conn:
-            cur = conn.cursor()
-
-            cur.execute(query)
-
-            return [row[0] for row in cur.fetchall()]
-
-    def filter_by_customer(self, customer_name):
-        query = self.BASE_QUERY + """
-        WHERE Customers.CustomerName = ?
-        """
-
-        return self._execute(query, (customer_name,))
-
-    def sort(self, field, order):
-        field_map = {
-            "customer": "Customers.CustomerName",
-            "date": "Orders.OrderDate",
-            "amount": "Orders.OrderAmount"
+        fields = {
+            "Заказчик": Client.name,
+            "Дата заказа": Order.order_date,
+            "Сумма заказа": Order.total_amount,
         }
 
-        sql_field = field_map.get(
-            field,
-            "Customers.CustomerName"
-        )
+        field = fields[field_name]
 
-        query = self.BASE_QUERY + f"""
-        ORDER BY {sql_field} {order}
-        """
+        if is_asc:
+            return query.order_by(field.asc())
+        
+        return query.order_by(field.desc())
+    
+    @staticmethod
+    def get_total_amount(query):
 
-        return self._execute(query)
+        total = query.select(fn.SUM(Order.total_amount)).scalar()
 
-    def search(self, text):
-        pattern = f"%{text}%"
-
-        query = self.BASE_QUERY + """
-        WHERE
-            Customers.CustomerName LIKE ?
-            OR Customers.City LIKE ?
-            OR Customers.Phone LIKE ?
-            OR Orders.OrderDate LIKE ?
-            OR CAST(Orders.OrderAmount AS TEXT) LIKE ?
-        """
-
-        return self._execute(query, (
-            pattern,
-            pattern,
-            pattern,
-            pattern,
-            pattern
-        ))
-
-    def _execute(self, query, params=()):
-        with self.db.connect() as conn:
-            cur = conn.cursor()
-
-            cur.execute(query, params)
-
-            return cur.fetchall()
+        if total is None:
+            return 0
+        
+        return total

@@ -1,233 +1,145 @@
 from PyQt6 import uic
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
-    QAbstractItemView,
-    QHeaderView,
     QMainWindow,
-    QMessageBox,
-    QTableWidgetItem
+    QTableWidgetItem,
+    QMessageBox
 )
+from models.models import Client, Order
+from services.order_service import OrderService
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, service):
+    
+    def __init__(self):
+
         super().__init__()
 
         uic.loadUi("ui/main_window.ui", self)
 
-        self.service = service
+        self.setMinimumSize(895, 645)
 
-        self.setup_table()
-        self.bind_events()
+        self.current_query = None
 
-        self.load_customers()
         self.load_data()
+        self.load_clients()
 
-    def setup_table(self):
-        self.tableOrders.setColumnCount(5)
+        self.btnFilter.clicked.connect(self.filter_orders)
+        self.btnShowAll.clicked.connect(self.show_all_orders)
+        self.btnSearch.clicked.connect(self.search_text)
 
-        self.tableOrders.setHorizontalHeaderLabels([
-            "Заказчик",
-            "Город",
-            "Телефон",
-            "Дата заказа",
-            "Сумма заказа"
-        ])
+        self.radioAsc.toggled.connect(self.sort_orders)
+        self.radioDesc.toggled.connect(self.sort_orders)
+        self.listSortFields.currentIndexChanged.connect(self.sort_orders)
 
-        self.tableOrders.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.Stretch
-        )
+    def load_clients(self):
 
-        self.tableOrders.setEditTriggers(
-            QAbstractItemView.EditTrigger.NoEditTriggers
-        )
+        self.comboClients.clear()
 
-        self.tableOrders.setSelectionBehavior(
-            QAbstractItemView.SelectionBehavior.SelectRows
-        )
+        clients = OrderService.get_clients()
 
-    def bind_events(self):
-        self.btnFilter.clicked.connect(self.filter_data)
-
-        self.btnShowAll.clicked.connect(
-            self.load_data
-        )
-
-        self.btnSearch.clicked.connect(
-            self.search_data
-        )
-
-        self.radioAsc.toggled.connect(
-            self.sort_data
-        )
-
-        self.radioDesc.toggled.connect(
-            self.sort_data
-        )
-
-    def load_customers(self):
-        try:
-            self.comboClients.clear()
-
-            customers = self.service.get_customers()
-
-            self.comboClients.addItems(customers)
-
-        except Exception as e:
-            self.show_error(e)
+        for client in clients:
+            self.comboClients.addItem(client.name, client.id)
 
     def load_data(self):
+
         try:
-            rows = self.service.get_all()
+            query = OrderService.get_orders()
 
-            self.fill_table(rows)
+            self.current_query = query
 
-        except Exception as e:
-            self.show_error(e)
+            self.fill_table(query)
 
-    def fill_table(self, rows):
-        self.tableOrders.clearContents()
+        except Exception as error:
+            self.show_error(str(error))
 
-        self.tableOrders.setRowCount(
-            len(rows)
-        )
+    def fill_table(self, query):
 
-        for row_index, row_data in enumerate(rows):
+        orders = list(query)
 
-            for col_index, value in enumerate(row_data):
+        self.tableOrders.setRowCount(len(orders))
 
-                item = QTableWidgetItem(
-                    str(value)
-                )
+        for row, order in enumerate(orders):
+            self.tableOrders.setItem(row, 0, QTableWidgetItem(order.client.name))
+            self.tableOrders.setItem(row, 1, QTableWidgetItem(order.client.city))
+            self.tableOrders.setItem(row, 2, QTableWidgetItem(order.client.phone))
+            self.tableOrders.setItem(row, 3, QTableWidgetItem(str(order.order_date)))
+            self.tableOrders.setItem(row, 4, QTableWidgetItem(str(order.total_amount)))
 
-                item.setTextAlignment(
-                    Qt.AlignmentFlag.AlignCenter
-                )
+        self.update_info(query)
 
-                self.tableOrders.setItem(
-                    row_index,
-                    col_index,
-                    item
-                )
+    def update_info(self, query):
 
-        self.update_statistics(rows)
+        count = query.count()
 
-    def update_statistics(self, rows):
-        count = len(rows)
+        total_amount = OrderService.get_total_amount(query)
 
-        total = sum(
-            float(row[4])
-            for row in rows
-        )
+        self.labelCount.setText(f'Всего заказов: {count}')
+        self.labelSum.setText(f'Общая сумма: {total_amount}')
 
-        self.labelCount.setText(
-            f"Всего заказов: {count}"
-        )
+    def filter_orders(self):
 
-        self.labelSum.setText(
-            f"Общая сумма: {total:.2f}"
-        )
-
-    def filter_data(self):
         try:
-            customer = (
-                self.comboClients.currentText()
-            )
+            client_id = self.comboClients.currentData()
 
-            rows = self.service.filter_by_customer(
-                customer
-            )
+            query = OrderService.filter_by_client(client_id)
 
-            self.fill_table(rows)
+            self.current_query = query
 
-        except Exception as e:
-            self.show_error(e)
+            self.fill_table(query)
 
-    def sort_data(self):
+        except Exception as error:
+            self.show_error(str(error))
+
+    def show_all_orders(self):
+
+        self.load_data()
+
+    def sort_orders(self):
+
         try:
-            field_map = {
-                "Заказчик": "customer",
-                "Дата заказа": "date",
-                "Сумма заказа": "amount"
-            }
-
-            selected = (
-                self.listSortFields.currentText()
-            )
-
-            field = field_map.get(
-                selected
-            )
-
-            order = "ASC"
-
-            if self.radioDesc.isChecked():
-                order = "DESC"
-
-            rows = self.service.sort(
-                field,
-                order
-            )
-
-            self.fill_table(rows)
-
-        except Exception as e:
-            self.show_error(e)
-
-    def search_data(self):
-        try:
-            text = (
-                self.lineSearch
-                .text()
-                .strip()
-            )
-
-            if not text:
-                QMessageBox.information(
-                    self,
-                    "Поиск",
-                    "Введите строку поиска"
-                )
+            if self.current_query is None:
                 return
 
-            rows = self.service.search(text)
+            field_name = self.listSortFields.currentText()
 
-            self.fill_table(rows)
+            is_asc = self.radioAsc.isChecked()
 
-            for row in range(
-                self.tableOrders.rowCount()
-            ):
+            query = OrderService.sort_orders(self.current_query, field_name, is_asc)
 
-                for col in range(
-                    self.tableOrders.columnCount()
-                ):
+            self.fill_table(query)
 
-                    item = self.tableOrders.item(
-                        row,
-                        col
-                    )
+        except Exception as error:
+            self.show_error(str(error))
 
-                    if item is None:
-                        continue
+    def search_text(self):
 
-                    item.setBackground(
-                        Qt.GlobalColor.white
-                    )
+        text = self.lineSearch.text().lower().strip()
 
-                    if (
-                        text.lower()
-                        in item.text().lower()
-                    ):
-                        item.setBackground(
-                            Qt.GlobalColor.yellow
-                        )
+        if text == '':
+            QMessageBox.information(self, 'Информация', 'Введите строку поиска')
+            return
 
-        except Exception as e:
-            self.show_error(e)
+        found = False
 
-    def show_error(self, error):
-        QMessageBox.critical(
-            self,
-            "Ошибка",
-            str(error)
-        )
+        for row in range(self.tableOrders.rowCount()):
+
+            for column in range(self.tableOrders.columnCount()):
+
+                item = self.tableOrders.item(row, column)
+
+                item.setBackground(QColor('white'))
+
+                if text in item.text().lower():
+
+                    found = True
+
+                    item.setBackground(QColor('yellow'))
+
+        if not found:
+            QMessageBox.information(self, 'Информация', 'Совпадений не найдено')
+    
+    def show_error(self, message):
+
+        QMessageBox.critical(self, 'Ошибка', message)

@@ -16,12 +16,15 @@ use master;
 go
 
 declare @i int = 1
+declare @count int = 10
+
 declare @sql nvarchar(max)
+
 declare @username nvarchar(6)
 declare @password nvarchar(5)
 declare @dbname nvarchar(4)
 
-while @i <= 10
+while @i <= @count
 begin
   set @username = 'user' + cast(@i as nvarchar(2));
   set @password = substring(replace(newid(), '-', ''), 1, 5);
