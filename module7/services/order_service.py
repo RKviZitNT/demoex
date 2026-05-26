@@ -1,47 +1,34 @@
-from peewee import fn
+from peewee import SelectQuery
 
-from models.models import Client, Order
+from models.models import Clients, Orders
 
 
-class OrderService:
+class OrdersService:
 
     @staticmethod
     def get_clients():
-        
-        return Client.select()
-    
+        return Clients.select()
+
     @staticmethod
     def get_orders():
+        return Orders.select(Orders, Clients).join(Clients)
 
-        return Order.select(Order, Client).join(Client)
-    
     @staticmethod
-    def filter_by_client(client_id):
+    def filter_orders(client):
+        return Orders.select(Orders, Clients).join(Clients).where(Orders.client == client)
 
-        return Order.select(Order, Client).join(Client).where(Client.id == client_id)
-    
     @staticmethod
-    def sort_orders(query, field_name, is_asc):
-
+    def sort_orders(query: SelectQuery, field_name, is_asc):
         fields = {
-            "Заказчик": Client.name,
-            "Дата заказа": Order.order_date,
-            "Сумма заказа": Order.total_amount,
+            "Заказчик": Clients.name,
+            "Город": Clients.city,
+            "Количество продукции": Orders.products_quantity,
         }
 
         field = fields[field_name]
 
-        if is_asc:
-            return query.order_by(field.asc())
-        
-        return query.order_by(field.desc())
-    
+        return query.order_by(field.asc() if is_asc else field.desc())
+
     @staticmethod
-    def get_total_amount(query):
-
-        total = query.select(fn.SUM(Order.total_amount)).scalar()
-
-        if total is None:
-            return 0
-        
-        return total
+    def total_products_quantity(query: SelectQuery):
+        return sum(order.products_quantity or 0 for order in query)

@@ -1,8 +1,8 @@
 from peewee import PostgresqlDatabase
 
 
-database = PostgresqlDatabase(
-    "orders_db",
+DB = PostgresqlDatabase(
+    'demka',
     user="user",
     password="pass",
     host="localhost",

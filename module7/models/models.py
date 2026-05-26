@@ -1,26 +1,42 @@
 from peewee import *
 
-from storage.postgres.database import database
+from storage.postgres.database import DB
 
 
 class BaseModel(Model):
 
-    class Meta():
-        database = database
+    class Meta:
+        database = DB
 
 
-class Client(BaseModel):
+class Clients(BaseModel):
+
+    class Meta:
+        table_name = "Clients"
 
     name = CharField()
     city = CharField()
     phone = CharField()
 
-    def __str__(self):
-        return self.name
-    
 
-class Order(BaseModel):
-    
-    client = ForeignKeyField(Client, backref="orders")
-    order_date = DateField()
-    total_amount = DecimalField(max_digits=12, decimal_places=2)
+class Manufacturer(BaseModel):
+
+    class Meta:
+        table_name = "Manufacturer"
+
+    name = CharField()
+    description = TextField()
+    phone = CharField()
+    email = CharField()
+
+
+class Orders(BaseModel):
+
+    class Meta:
+        table_name = "Orders"
+
+    manufacturer = ForeignKeyField(Manufacturer, backref="orders", column_name="manufacturer_id")
+    client = ForeignKeyField(Clients, backref="orders", column_name="client_id")
+    total_amount = DecimalField()
+    products_quantity = DecimalField()
+    order_date = DateTimeField()

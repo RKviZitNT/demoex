@@ -1,37 +1,32 @@
-create or replace function calculate_order_amount()
+create or replace function calc_order_total_amount()
 returns trigger
+language plpgsql
 as $$
-declare
-	product_cost numeric(12,2);
+
+declare product_cost numeric;
+
 begin
+
 	select
-		sum(sm.quantity * mp.price)
+		sum(sm.quantity * mp.price * new.quantity)
 	into product_cost
 	from "Specifications" s
 	join "SpecificationsMaterials" sm
 		on sm.specification_id = s.id
 	join "MaterialsPrices" mp
-		on mp.material_is = sm.material_id
-	where s.product_id = NEW.product_id;
-
-	update "OrdersItems"
-	set amount = NEW.quantity * product_cost,
-		price_per_unit = product_cost
-	where id = NEW.id;
+		on mp.material_id = sm.material_id
+	where s.product_id = new.product_id;
 
 	update "Orders"
-	set amount = (
-		select sum(amount)
-		from "OrdersItems"
-		where order_id = NEW.order_id
-	)
-	where id = NEW.order_id;
+	set total_amount = coalesce(total_amount, 0) + coalesce(product_cost, 0)
+	where id = new.order_id;
 
-	return NEW;
+	return new;
+
 end;
-$$ language plpgsql;
+$$;
 
-CREATE TRIGGER trg_calculate_order_amount
-AFTER INSERT ON "OrdersItems"
-FOR EACH ROW
-EXECUTE FUNCTION calculate_order_amount();
+create trigger trg_calc_order_total_amount
+after insert on "OrdersItems"
+for each row
+execute function calc_order_total_amount();

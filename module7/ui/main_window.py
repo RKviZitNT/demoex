@@ -1,145 +1,110 @@
-from PyQt6 import uic
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor
+from PyQt6.QtGui import QColor, QBrush
 from PyQt6.QtWidgets import (
     QMainWindow,
     QTableWidgetItem,
     QMessageBox
 )
-from models.models import Client, Order
-from services.order_service import OrderService
+
+from services.orders_service import OrdersService
+
+from ui.main_window_ui import Ui_MainWindow
 
 
-class MainWindow(QMainWindow):
-    
+class MainWindow(QMainWindow, Ui_MainWindow):
+
     def __init__(self):
-
         super().__init__()
 
-        uic.loadUi("ui/main_window.ui", self)
+        self.setupUi(self)
 
-        self.setMinimumSize(895, 645)
+        self.query = None
 
-        self.current_query = None
-
-        self.load_data()
         self.load_clients()
+        self.load_orders()
+        self.sort_orders()
 
         self.btnFilter.clicked.connect(self.filter_orders)
-        self.btnShowAll.clicked.connect(self.show_all_orders)
-        self.btnSearch.clicked.connect(self.search_text)
+        self.btnShowAll.clicked.connect(self.load_orders)
+        self.btnSearch.clicked.connect(self.search)
 
-        self.radioAsc.toggled.connect(self.sort_orders)
-        self.radioDesc.toggled.connect(self.sort_orders)
-        self.listSortFields.currentIndexChanged.connect(self.sort_orders)
+        self.comboSelectSortField.currentTextChanged.connect(self.sort_orders)
+
+        self.radioAsc.clicked.connect(self.sort_orders)
+        self.radioDesc.clicked.connect(self.sort_orders)
 
     def load_clients(self):
+        self.comboSelectClient.clear()
 
-        self.comboClients.clear()
+        for client in OrdersService.get_clients():
+            self.comboSelectClient.addItem(client.name, client.id)
 
-        clients = OrderService.get_clients()
+    def load_orders(self):
+        self.query = OrdersService.get_orders()
 
-        for client in clients:
-            self.comboClients.addItem(client.name, client.id)
+        self.fill_table()
 
-    def load_data(self):
-
-        try:
-            query = OrderService.get_orders()
-
-            self.current_query = query
-
-            self.fill_table(query)
-
-        except Exception as error:
-            self.show_error(str(error))
-
-    def fill_table(self, query):
-
-        orders = list(query)
+    def fill_table(self):
+        orders = list(self.query)
 
         self.tableOrders.setRowCount(len(orders))
 
         for row, order in enumerate(orders):
-            self.tableOrders.setItem(row, 0, QTableWidgetItem(order.client.name))
-            self.tableOrders.setItem(row, 1, QTableWidgetItem(order.client.city))
-            self.tableOrders.setItem(row, 2, QTableWidgetItem(order.client.phone))
-            self.tableOrders.setItem(row, 3, QTableWidgetItem(str(order.order_date)))
-            self.tableOrders.setItem(row, 4, QTableWidgetItem(str(order.total_amount)))
+            data = [
+                order.client.name,
+                order.client.city,
+                order.client.phone,
+                str(order.order_date),
+                str(order.products_quantity),
+            ]
 
-        self.update_info(query)
+            for column, value in enumerate(data):
+                self.tableOrders.setItem(row, column, QTableWidgetItem(value))
 
-    def update_info(self, query):
-
-        count = query.count()
-
-        total_amount = OrderService.get_total_amount(query)
-
-        self.labelCount.setText(f'Всего заказов: {count}')
-        self.labelSum.setText(f'Общая сумма: {total_amount}')
+        self.labelTotalOrders.setText(f"Всего заказов: {len(orders)}")
+        self.labelTotalOrderedProducts.setText(f"Всего заказанной продукции: {OrdersService.total_products_quantity(self.query)}")
 
     def filter_orders(self):
+        client = self.comboSelectClient.currentData()
 
-        try:
-            client_id = self.comboClients.currentData()
+        self.query = OrdersService.filter_orders(client)
 
-            query = OrderService.filter_by_client(client_id)
-
-            self.current_query = query
-
-            self.fill_table(query)
-
-        except Exception as error:
-            self.show_error(str(error))
-
-    def show_all_orders(self):
-
-        self.load_data()
+        self.fill_table()
 
     def sort_orders(self):
+        field_name = self.comboSelectSortField.currentText()
+        is_asc = self.radioAsc.isChecked()
 
-        try:
-            if self.current_query is None:
-                return
+        self.query = OrdersService.sort_orders(OrdersService.get_orders(), field_name, is_asc)
 
-            field_name = self.listSortFields.currentText()
+        self.fill_table()
 
-            is_asc = self.radioAsc.isChecked()
+    def search(self):
+        text = self.lineSearch.text().lower()
 
-            query = OrderService.sort_orders(self.current_query, field_name, is_asc)
-
-            self.fill_table(query)
-
-        except Exception as error:
-            self.show_error(str(error))
-
-    def search_text(self):
-
-        text = self.lineSearch.text().lower().strip()
-
-        if text == '':
-            QMessageBox.information(self, 'Информация', 'Введите строку поиска')
+        if not text:
+            self.show_info("Введите строку для поиска")
             return
 
         found = False
 
         for row in range(self.tableOrders.rowCount()):
-
             for column in range(self.tableOrders.columnCount()):
-
                 item = self.tableOrders.item(row, column)
 
-                item.setBackground(QColor('white'))
+                if not item:
+                    continue
+
+                item.setBackground(QBrush())
 
                 if text in item.text().lower():
+                    item.setBackground(QColor(0, 100, 100))
 
                     found = True
 
-                    item.setBackground(QColor('yellow'))
-
         if not found:
-            QMessageBox.information(self, 'Информация', 'Совпадений не найдено')
-    
-    def show_error(self, message):
+            self.show_info("Ничего не найдено")
 
-        QMessageBox.critical(self, 'Ошибка', message)
+
+
+    def show_info(self, message):
+        QMessageBox.information(self, "Информация", message)
